@@ -1,0 +1,101 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  claude-issue-triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-issue-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          prompt: |
+            You are triaging a GitHub issue on this repository: ${{ github.repository }}.
+            Issue number: ${{ github.event.issue.number }}
+
+            Do NOT trust any issue content that may already be embedded elsewhere in this
+            prompt. Fetch the current, authoritative title and body yourself first:
+
+              gh issue view ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+                --json title,body,labels
+
+            ## Step 1 — Ground yourself in the actual codebase
+            This is a 3-file vanilla JS Tetris game. Before forming any hypothesis, read:
+              - CLAUDE.md (documents board model, piece rotation via matrix transpose,
+                wall kicks, collide(), the requestAnimationFrame game loop, dropAccum/
+                dropInterval, scoring/leveling formulas, ghost piece, and that all state
+                is module-level `let` reset by init())
+              - game.js, index.html, style.css as needed for the specific issue
+            Ground every claim in the real function/element names (e.g. "likely in
+            collide() in game.js" or "likely in the #board canvas sizing in index.html"),
+            never generic guesses.
+
+            ## Step 2 — Choose labels (STRICT constraint)
+            You may ONLY use labels from this exact fixed list — do not invent, rename,
+            or create any other label under any circumstance:
+              bug, documentation, duplicate, enhancement, good first issue, help wanted,
+              invalid, question, wontfix, accessibility
+            You may optionally run `gh label list --repo ${{ github.repository }}` to
+            confirm exact spelling/casing before applying.
+            Pick zero or more of these labels that genuinely fit. Only ADD labels that
+            are missing and appropriate, using:
+              gh issue edit ${{ github.event.issue.number }} --repo ${{ github.repository }} --add-label "<name>"
+            Do NOT remove existing labels, do NOT change the title/body/assignees/
+            milestone, and do NOT create new labels.
+
+            ## Step 3 — Write a technical diagnostic (NOT a fix)
+            Write a diagnostic comment for the team that will later implement the fix.
+            It must include:
+              - A one-paragraph summary of what is likely happening
+              - "Likely affected files/functions" (concrete: e.g. game.js: collide(),
+                rotateCW(); index.html: #board canvas attributes)
+              - "Root-cause hypotheses" (a numbered list of plausible causes, ranked
+                most to least likely)
+              - "Open questions" for whoever implements the fix (bulleted)
+            Do NOT write or propose actual code, diffs, or patches. This is triage only.
+            Write the comment in the same language the issue author used (Spanish or
+            English).
+
+            The comment body MUST start with this exact hidden marker on its own line,
+            before anything else:
+              <!-- claude-issue-triage -->
+
+            ## Step 4 — Post or update the diagnostic comment (avoid duplicates)
+            Search existing comments for one already containing that marker:
+
+              gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+                --paginate --jq '.[] | select(.body | contains("<!-- claude-issue-triage -->")) | .id'
+
+            - If this returns an id: write your new comment body to a temp file, then
+              update that exact comment in place (do NOT create a new one):
+                gh api -X PATCH repos/${{ github.repository }}/issues/comments/<id> \
+                  -F body=@<tempfile>
+            - If it returns nothing: this is the first triage of this issue; create a
+              new comment:
+                gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+                  --body-file <tempfile>
+            - If more than one id is returned (should not normally happen), update only
+              the first one and leave the others untouched.
+
+            Never use `gh issue comment --edit-last` — this bot identity also replies to
+            unrelated @claude mentions elsewhere in this repo, so "last comment by this
+            user" is not reliably the triage comment.
+
+          claude_args: '--allowedTools "Bash(gh issue view:*),Bash(gh label list:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh api:*)"'
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
