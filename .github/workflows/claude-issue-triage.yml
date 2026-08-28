@@ -70,6 +70,8 @@ jobs:
             Do NOT write or propose actual code, diffs, or patches. This is triage only.
             Write the comment in the same language the issue author used (Spanish or
             English).
+            Format the comment body in Markdown that GitHub can render correctly
+            (headings, bullet/numbered lists, and inline code spans as appropriate).
 
             The comment body MUST start with this exact hidden marker on its own line,
             before anything else:
