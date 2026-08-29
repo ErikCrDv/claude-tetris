@@ -8,6 +8,17 @@
 </head>
 <body>
   <div class="wrapper">
+    <div id="start-overlay" class="overlay">
+      <div class="overlay-box">
+        <p id="start-title">TETRIS</p>
+        <ol id="start-highscores"></ol>
+        <p id="start-best-combo">Mejor combo: 0</p>
+        <p id="start-max-lines">Líneas máximas: 0</p>
+        <button id="play-btn">Jugar</button>
+        <button id="reset-records-btn">Reiniciar records</button>
+      </div>
+    </div>
+
     <div class="title-bar">
       <h1 class="game-title">TETRIS</h1>
       <label class="theme-toggle" title="Cambiar tema">
@@ -56,6 +67,10 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+        <p id="overlay-stats"></p>
+        <input id="name-input" placeholder="Tu nombre" maxlength="12" />
+        <button id="save-score-btn">Guardar</button>
+        <ol id="gameover-highscores"></ol>
         <button id="restart-btn">Reiniciar</button>
       </div>
     </div>

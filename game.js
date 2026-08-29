@@ -44,11 +44,26 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const startOverlay = document.getElementById('start-overlay');
+const startHighscoresEl = document.getElementById('start-highscores');
+const startBestComboEl = document.getElementById('start-best-combo');
+const startMaxLinesEl = document.getElementById('start-max-lines');
+const playBtn = document.getElementById('play-btn');
+const resetRecordsBtn = document.getElementById('reset-records-btn');
+const overlayStats = document.getElementById('overlay-stats');
+const nameInput = document.getElementById('name-input');
+const saveScoreBtn = document.getElementById('save-score-btn');
+const gameoverHighscoresEl = document.getElementById('gameover-highscores');
 
 const THEME_STORAGE_KEY = 'tetris-theme';
+const HIGHSCORES_KEY = 'tetris-highscores';
+const BEST_COMBO_KEY = 'tetris-best-combo';
+const MAX_LINES_KEY = 'tetris-max-lines';
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let gridLineColor, blockHighlightColor;
+let combo = 0;
+let bestComboThisGame = 0;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -122,7 +137,11 @@ function clearLines() {
     score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    combo++;
+    bestComboThisGame = Math.max(bestComboThisGame, combo);
     updateHUD();
+  } else {
+    combo = 0;
   }
 }
 
@@ -258,11 +277,126 @@ themeToggle.addEventListener('change', () => {
   applyTheme(themeToggle.checked ? 'light' : 'dark');
 });
 
+function loadHighscores() {
+  try {
+    const raw = localStorage.getItem(HIGHSCORES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHighscores(list) {
+  try {
+    localStorage.setItem(HIGHSCORES_KEY, JSON.stringify(list));
+  } catch {
+    // localStorage unavailable (private browsing, quota, etc.) — ignore
+  }
+}
+
+function isTopScore(s) {
+  const list = loadHighscores();
+  return list.length < 5 || s > list[list.length - 1].score;
+}
+
+function saveHighscore(name, s) {
+  const list = loadHighscores();
+  const entry = { name: name || 'Jugador', score: s };
+  list.push(entry);
+  list.sort((a, b) => b.score - a.score);
+  const trimmed = list.slice(0, 5);
+  saveHighscores(trimmed);
+  return trimmed.indexOf(entry);
+}
+
+function renderHighscores(listEl, highlightIndex) {
+  const list = loadHighscores();
+  listEl.innerHTML = '';
+  list.forEach((entry, i) => {
+    const li = document.createElement('li');
+    li.textContent = `${entry.name} — ${entry.score.toLocaleString()}`;
+    if (i === highlightIndex) li.classList.add('highscore-new');
+    listEl.appendChild(li);
+  });
+}
+
+function loadBestStats() {
+  const bestCombo = parseInt(localStorage.getItem(BEST_COMBO_KEY), 10) || 0;
+  const maxLines = parseInt(localStorage.getItem(MAX_LINES_KEY), 10) || 0;
+  return { combo: bestCombo, lines: maxLines };
+}
+
+function saveBestStats(comboVal, linesVal) {
+  const prev = loadBestStats();
+  const updated = {
+    combo: Math.max(prev.combo, comboVal),
+    lines: Math.max(prev.lines, linesVal),
+  };
+  try {
+    localStorage.setItem(BEST_COMBO_KEY, updated.combo);
+    localStorage.setItem(MAX_LINES_KEY, updated.lines);
+  } catch {
+    // localStorage unavailable (private browsing, quota, etc.) — ignore
+  }
+  return updated;
+}
+
+function renderStartScreen() {
+  renderHighscores(startHighscoresEl);
+  const stats = loadBestStats();
+  startBestComboEl.textContent = `Mejor combo: ${stats.combo}`;
+  startMaxLinesEl.textContent = `Líneas máximas: ${stats.lines}`;
+}
+
+function resetRecords() {
+  try {
+    localStorage.removeItem(HIGHSCORES_KEY);
+    localStorage.removeItem(BEST_COMBO_KEY);
+    localStorage.removeItem(MAX_LINES_KEY);
+  } catch {
+    // localStorage unavailable (private browsing, quota, etc.) — ignore
+  }
+  renderStartScreen();
+  if (!overlay.classList.contains('hidden')) {
+    renderHighscores(gameoverHighscoresEl);
+  }
+}
+
+function handleSaveScore() {
+  const name = nameInput.value.trim() || 'Jugador';
+  const highlightIndex = saveHighscore(name, score);
+  renderHighscores(gameoverHighscoresEl, highlightIndex);
+  nameInput.classList.add('hidden');
+  saveScoreBtn.classList.add('hidden');
+}
+
+saveScoreBtn.addEventListener('click', handleSaveScore);
+nameInput.addEventListener('keydown', e => {
+  if (e.code === 'Enter') handleSaveScore();
+});
+playBtn.addEventListener('click', () => {
+  startOverlay.classList.add('hidden');
+  init();
+});
+resetRecordsBtn.addEventListener('click', resetRecords);
+
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  saveBestStats(bestComboThisGame, lines);
+  overlayStats.textContent = `Combo: ${bestComboThisGame} · Líneas: ${lines}`;
+  if (isTopScore(score)) {
+    nameInput.classList.remove('hidden');
+    saveScoreBtn.classList.remove('hidden');
+    nameInput.value = '';
+    nameInput.focus();
+  } else {
+    nameInput.classList.add('hidden');
+    saveScoreBtn.classList.add('hidden');
+  }
+  renderHighscores(gameoverHighscoresEl);
   overlay.classList.remove('hidden');
 }
 
@@ -301,6 +435,8 @@ function init() {
   initTheme();
   board = createBoard();
   score = 0;
+  combo = 0;
+  bestComboThisGame = 0;
   lines = 0;
   level = 1;
   paused = false;
@@ -317,6 +453,7 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (!current) return;
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
@@ -343,4 +480,4 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 
-init();
+renderStartScreen();
