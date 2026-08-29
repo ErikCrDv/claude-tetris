@@ -321,9 +321,13 @@ function renderHighscores(listEl, highlightIndex) {
 }
 
 function loadBestStats() {
-  const bestCombo = parseInt(localStorage.getItem(BEST_COMBO_KEY), 10) || 0;
-  const maxLines = parseInt(localStorage.getItem(MAX_LINES_KEY), 10) || 0;
-  return { combo: bestCombo, lines: maxLines };
+  try {
+    const bestCombo = parseInt(localStorage.getItem(BEST_COMBO_KEY), 10) || 0;
+    const maxLines = parseInt(localStorage.getItem(MAX_LINES_KEY), 10) || 0;
+    return { combo: bestCombo, lines: maxLines };
+  } catch {
+    return { combo: 0, lines: 0 };
+  }
 }
 
 function saveBestStats(comboVal, linesVal) {
@@ -448,6 +452,8 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  nameInput.classList.add('hidden');
+  saveScoreBtn.classList.add('hidden');
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -480,4 +486,5 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 
+initTheme();
 renderStartScreen();
