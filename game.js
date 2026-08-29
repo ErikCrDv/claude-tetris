@@ -28,6 +28,18 @@ const PIECES = [
   [[8,8,8],[8,0,8],[8,8,8]],                  // N (ring, hueco central)
 ];
 
+const PASTEL_COLORS = [
+  null,
+  '#a8e0e8', // I - cyan
+  '#ffe9b3', // O - yellow
+  '#dcb3e0', // T - purple
+  '#bfe3c0', // S - green
+  '#f2b8b8', // Z - red
+  '#b3d4f0', // J - blue
+  '#ffd6a8', // L - orange
+  '#d8dde2', // N - gris plateado (tuerca)
+];
+
 const PIECE_WEIGHTS = [0, 1, 1, 1, 1, 1, 1, 1, 0.5]; // N pesa la mitad que las demás
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
@@ -44,11 +56,14 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const skinSelect = document.getElementById('skin-select');
 
 const THEME_STORAGE_KEY = 'tetris-theme';
+const SKIN_STORAGE_KEY = 'tetris-skin';
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let gridLineColor, blockHighlightColor;
+let currentSkin = 'retro';
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -172,14 +187,62 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = blockHighlightColor;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+
+  const px = x * size + 1;
+  const py = y * size + 1;
+  const w = size - 2;
+  const h = size - 2;
+
+  if (currentSkin === 'neon') {
+    const color = COLORS[colorIndex];
+    context.shadowColor = color;
+    context.shadowBlur = 12;
+    context.fillStyle = color;
+    context.fillRect(px, py, w, h);
+    context.shadowBlur = 0;
+    context.fillStyle = blockHighlightColor;
+    context.fillRect(px, py, w, 4);
+  } else if (currentSkin === 'pastel') {
+    const color = PASTEL_COLORS[colorIndex];
+    context.fillStyle = color;
+    if (context.roundRect) {
+      context.beginPath();
+      context.roundRect(px, py, w, h, 6);
+      context.fill();
+      context.fillStyle = blockHighlightColor;
+      context.beginPath();
+      context.roundRect(px, py, w, 4, [6, 6, 0, 0]);
+      context.fill();
+    } else {
+      context.fillRect(px, py, w, h);
+      context.fillStyle = blockHighlightColor;
+      context.fillRect(px, py, w, 4);
+    }
+  } else if (currentSkin === 'pixel') {
+    const color = COLORS[colorIndex];
+    context.fillStyle = color;
+    context.fillRect(px, py, w, h);
+    context.fillStyle = blockHighlightColor;
+    context.fillRect(px, py, w, 4);
+    const prevAlpha = context.globalAlpha;
+    context.globalAlpha = prevAlpha * 0.35;
+    context.fillStyle = '#000';
+    const half = size / 2;
+    context.fillRect(px, py + half, half - 1, half - 1);
+    context.fillRect(px + half, py, half - 1, half - 1);
+    context.globalAlpha = prevAlpha;
+  } else {
+    const color = COLORS[colorIndex];
+    context.fillStyle = color;
+    context.fillRect(px, py, w, h);
+    context.fillStyle = blockHighlightColor;
+    context.fillRect(px, py, w, 4);
+  }
+
   context.globalAlpha = 1;
+  context.shadowBlur = 0;
+  context.fillStyle = '#000';
 }
 
 function drawGrid() {
@@ -258,6 +321,26 @@ themeToggle.addEventListener('change', () => {
   applyTheme(themeToggle.checked ? 'light' : 'dark');
 });
 
+function applySkin(skin) {
+  currentSkin = skin;
+  document.documentElement.setAttribute('data-skin', skin);
+  localStorage.setItem(SKIN_STORAGE_KEY, skin);
+  skinSelect.value = skin;
+  if (current) {
+    draw();
+    drawNext();
+  }
+}
+
+function initSkin() {
+  const saved = localStorage.getItem(SKIN_STORAGE_KEY);
+  applySkin(['retro', 'neon', 'pastel', 'pixel'].includes(saved) ? saved : 'retro');
+}
+
+skinSelect.addEventListener('change', () => {
+  applySkin(skinSelect.value);
+});
+
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
@@ -299,6 +382,7 @@ function loop(ts) {
 
 function init() {
   initTheme();
+  initSkin();
   board = createBoard();
   score = 0;
   lines = 0;
